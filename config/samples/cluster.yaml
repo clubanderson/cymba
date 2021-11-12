@@ -1,8 +1,0 @@
-apiVersion: cluster.example.dev/v1alpha1
-kind: Cluster
-metadata:
-  name: local
-  labels:
-    kcp.dev/group: GROUP
-spec:
-  kubeconfig: |

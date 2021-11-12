@@ -34,7 +34,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const crdPath = "/Users/dettori@us.ibm.com/go/src/github.com/pdettori/cymba/config/crd/bases"
+const crdPath = "config/crd/bases"
 
 //ApplyCRDs applies the CRDs defined in base path to the embedded API server
 func ApplyCRDs(ctx context.Context, config *rest.Config) error {
@@ -54,7 +54,6 @@ func ApplyCRDs(ctx context.Context, config *rest.Config) error {
 		crdObjList = append(crdObjList, crdObj)
 		_, err = apiextensionsClientSet.ApiextensionsV1().CustomResourceDefinitions().Create(ctx, crdObj, metav1.CreateOptions{})
 		if err != nil && !apierrors.IsAlreadyExists(err) {
-			fmt.Printf(">>>>>>>>> error %s\n", err)
 			return err
 		}
 	}
@@ -63,6 +62,8 @@ func ApplyCRDs(ctx context.Context, config *rest.Config) error {
 	if err != nil {
 		return err
 	}
+	// add extra time for CRD registration (without it still might fail to start controllers)
+	time.Sleep(5 * time.Second)
 
 	return nil
 }
@@ -115,7 +116,7 @@ func waitAllCrdRegistered(ctx context.Context, apiextensionsClientSet *apiextens
 		checkMap[crd.Name] = true
 	}
 
-	err := wait.Poll(5*time.Second, 600*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		// Get does not work with KCP, it returns Cluster should not be empty for request 'get' on resource 'customresourcedefinitions'
 		// likely it's because cluster header is not inserted for "get" https://github.com/davidfestal/kcp-kubernetes/blob/ff838d2deed553d8a6923dee064cbebb799ba281/pkg/controlplane/clientutils/multiclusterconfig.go
 		list, err := apiextensionsClientSet.ApiextensionsV1().CustomResourceDefinitions().List(ctx, metav1.ListOptions{})

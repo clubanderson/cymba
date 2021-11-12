@@ -17,10 +17,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"flag"
 
 	"github.com/kcp-dev/kcp/pkg/server"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -28,31 +28,35 @@ import (
 	"github.com/pdettori/cymba/pkg/controllermanager"
 	"github.com/pdettori/cymba/pkg/crd"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-var (
-	setupLog = ctrl.Log.WithName("setup")
-)
 
 func main() {
+	var startControllerManager bool
+	flag.BoolVar(&startControllerManager, "controller-manager", true,
+		"start controller manager with server")
+	flag.Parse()
+
 	// Setup signal handler for a cleaner shutdown
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Kill, os.Interrupt)
 	defer cancel()
 	srv := server.NewServer(server.DefaultConfig())
 
 	// Register a post-start hook that connects to the api-server
-	srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
-		err := crd.ApplyCRDs(ctx, context.LoopbackClientConfig)
-		if err != nil {
-			return err
-		}
-		fmt.Print("AFTER CRD CREATED !!")
-		err = controllermanager.StartManager(context.LoopbackClientConfig)
-		if err != nil {
-			log.Fatalf("error starting controller manager: %s", err)
-		}
-		return nil
-	})
+	if startControllerManager {
+		srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
+			err := crd.ApplyCRDs(ctx, context.LoopbackClientConfig)
+			if err != nil {
+				return err
+			}
+
+			err = controllermanager.StartManager(context.LoopbackClientConfig)
+			if err != nil {
+				log.Fatalf("error starting controller manager: %s", err)
+			}
+
+			return nil
+		})
+	}
 	srv.Run(ctx)
 }

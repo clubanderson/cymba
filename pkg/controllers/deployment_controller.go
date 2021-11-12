@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -152,14 +153,23 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	fmt.Printf(">>>>> checking for deployments ....")
+	dl, err := r.CSet.AppsV1().Deployments("default").List(context.Background(), v1.ListOptions{})
+	if err != nil {
+		return err
+	}
+	for _,d := range dl.Items {
+		fmt.Printf(">>>>> d=%+v\n", d)
+	}
+
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &corev1.Pod{}, podOwnerKey, func(rawObj client.Object) []string {
-		// grab the job object, extract the owner...
+		// grab the pod object, extract the owner...
 		pod := rawObj.(*corev1.Pod)
 		owner := metav1.GetControllerOf(pod)
 		if owner == nil {
 			return nil
 		}
-		// ...make sure it's a CronJob...
+		// ...make sure it's a Deployment...
 		if owner.APIVersion != apiGVStr || owner.Kind != "Deployment" {
 			return nil
 		}

@@ -1,6 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
+  clusterName: admin
   name: example
   labels:
     kcp.dev/cluster: cluster2
