@@ -1,0 +1,7 @@
+apiVersion: github.com/v1
+kind: Pod
+metadata:
+  name: pod-sample
+spec:
+  # Add fields here
+  foo: bar
