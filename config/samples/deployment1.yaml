@@ -1,6 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  clusterName: admin
   name: deployment1
   labels:
     kcp.dev/group: group1
