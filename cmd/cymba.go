@@ -17,19 +17,20 @@ package main
 
 import (
 	"context"
-	"log"
+	"syscall"
+
+	//"log"
+	"flag"
 	"os"
 	"os/signal"
-	"flag"
 
 	"github.com/kcp-dev/kcp/pkg/server"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/pdettori/cymba/pkg/controllermanager"
+	"github.com/pdettori/cymba/pkg/controllers/pod"
 	"github.com/pdettori/cymba/pkg/crd"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 )
-
 
 func main() {
 	var startControllerManager bool
@@ -42,6 +43,14 @@ func main() {
 	defer cancel()
 	srv := server.NewServer(server.DefaultConfig())
 
+	// temporary hack
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-ch
+		os.Exit(1)
+	}()
+
 	// Register a post-start hook that connects to the api-server
 	if startControllerManager {
 		srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
@@ -50,10 +59,8 @@ func main() {
 				return err
 			}
 
-			err = controllermanager.StartManager(context.LoopbackClientConfig)
-			if err != nil {
-				log.Fatalf("error starting controller manager: %s", err)
-			}
+			//deployment.NewController(context.LoopbackClientConfig).Start(1)
+			pod.NewController(context.LoopbackClientConfig).Start(1)
 
 			return nil
 		})

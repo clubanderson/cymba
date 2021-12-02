@@ -59,7 +59,7 @@ func getImageFQName(name string) string {
 }
 
 // CreatePod creates and runs a pod with podman from a corev1.PodSpec
-func CreatePod(ctx context.Context, p corev1.Pod) (*entities.PodCreateReport, error) {
+func CreatePod(ctx context.Context, p *corev1.Pod) (*entities.PodCreateReport, error) {
 	podSpec := specgen.NewPodSpecGenerator()
 	podSpec.Name = p.Namespace + "_" + p.Name
 	//cOpts := &pods.CreateOptions{}
@@ -107,14 +107,14 @@ func CreatePod(ctx context.Context, p corev1.Pod) (*entities.PodCreateReport, er
 }
 
 // GetPod gets info about a pod
-func GetPod(ctx context.Context, p corev1.Pod) (*entities.PodInspectReport, error) {
+func GetPod(ctx context.Context, p *corev1.Pod) (*entities.PodInspectReport, error) {
 	name := p.Namespace + "_" + p.Name
 	return pods.Inspect(ctx, name, &pods.InspectOptions{})
 }
 
 // GetPodStatus gets pod info and fills corev1.Pod
 func GetPodStatus(ctx context.Context, p *corev1.Pod) error {
-	pr, err := GetPod(ctx, *p)
+	pr, err := GetPod(ctx, p)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func GetPodStatus(ctx context.Context, p *corev1.Pod) error {
 }
 
 // RemovePod deletes a pod and all containers in the pod
-func RemovePod(ctx context.Context, p corev1.Pod) (*entities.PodRmReport, error) {
+func RemovePod(ctx context.Context, p *corev1.Pod) (*entities.PodRmReport, error) {
 	name := p.Namespace + "_" + p.Name
 	_, err := pods.Kill(ctx, name, &pods.KillOptions{})
 	if err != nil {

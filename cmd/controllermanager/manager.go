@@ -1,5 +1,5 @@
 /*
-Copyright 2021.
+Copyright 2021 The KCP Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,23 +17,33 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	"log"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-
-	"github.com/pdettori/cymba/pkg/controllermanager"
-	//+kubebuilder:scaffold:imports
+	"github.com/pdettori/cymba/pkg/controllers/deployment"
 )
 
+const numThreads = 1
+
+var kubeconfig = flag.String("kubeconfig", "", "Path to kubeconfig")
+var kubecontext = flag.String("context", "", "Context to use in the Kubeconfig file, instead of the current context")
+
 func main() {
-	rCfg := ctrl.GetConfigOrDie()
-	err := controllermanager.StartManager(rCfg)
-	if err != nil {
-		log.Fatalf("error starting controller manager: %s", err)
+	flag.Parse()
+
+	var overrides clientcmd.ConfigOverrides
+	if *kubecontext != "" {
+		overrides.CurrentContext = *kubecontext
 	}
+
+	r, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: *kubeconfig},
+		&overrides).ClientConfig()
+	if err != nil {
+		klog.Fatal(err)
+	}
+
+	deployment.NewController(r).Start(numThreads)
 }

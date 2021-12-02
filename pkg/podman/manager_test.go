@@ -56,7 +56,7 @@ func TestCreatePod(t *testing.T) {
 
 	assert.NoError(t, err)
 
-	pod := corev1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      podName,
 			Namespace: podNamespacce,
@@ -84,7 +84,7 @@ func TestCreatePod(t *testing.T) {
 	x, _ := json.Marshal(pr)
 	fmt.Printf(">>> %s\n", string(x))
 
-	err = GetPodStatus(conn, &pod)
+	err = GetPodStatus(conn, pod)
 	assert.NoError(t, err)
 
 	x, _ = json.Marshal(pod)
