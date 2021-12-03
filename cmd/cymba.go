@@ -56,13 +56,15 @@ func main() {
 				return err
 			}
 
-			// set up signals so we handle the first shutdown signal gracefully
-			stopCh := controllers.SetupSignalHandler()
+			if true {
+				// set up signals so we handle the first shutdown signal gracefully
+				stopCh := controllers.SetupSignalHandler()
 
-			go deployment.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
-			klog.Infof("Deployment controller launched")
+				go deployment.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
+				klog.Infof("Deployment controller launched")
 
-			pod.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
+				pod.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
+			}
 
 			return nil
 		})
