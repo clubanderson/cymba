@@ -17,20 +17,25 @@ package main
 
 import (
 	"context"
-	"syscall"
+	//"syscall"
 
-	//"log"
 	"flag"
 	"os"
 	"os/signal"
 
+	"k8s.io/klog/v2"
+
 	"github.com/kcp-dev/kcp/pkg/server"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/pdettori/cymba/pkg/controllers"
+	"github.com/pdettori/cymba/pkg/controllers/deployment"
 	"github.com/pdettori/cymba/pkg/controllers/pod"
 	"github.com/pdettori/cymba/pkg/crd"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 )
+
+const numThreads = 1
 
 func main() {
 	var startControllerManager bool
@@ -43,14 +48,6 @@ func main() {
 	defer cancel()
 	srv := server.NewServer(server.DefaultConfig())
 
-	// temporary hack
-	ch := make(chan os.Signal)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-ch
-		os.Exit(1)
-	}()
-
 	// Register a post-start hook that connects to the api-server
 	if startControllerManager {
 		srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
@@ -59,8 +56,13 @@ func main() {
 				return err
 			}
 
-			//deployment.NewController(context.LoopbackClientConfig).Start(1)
-			pod.NewController(context.LoopbackClientConfig).Start(1)
+			// set up signals so we handle the first shutdown signal gracefully
+			stopCh := controllers.SetupSignalHandler()
+
+			go deployment.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
+			klog.Infof("Deployment controller launched")
+
+			pod.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
 
 			return nil
 		})

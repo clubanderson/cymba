@@ -45,5 +45,10 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	deployment.NewController(r).Start(numThreads)
+	stopCh := make(chan struct{}) // TODO: hook this up to SIGTERM/SIGINT
+
+	deployment.NewController(r, stopCh).Start(numThreads)
+
+	<-stopCh
+	klog.Infof("Stopping workers")
 }

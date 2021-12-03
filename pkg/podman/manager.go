@@ -60,12 +60,9 @@ func getImageFQName(name string) string {
 
 // CreatePod creates and runs a pod with podman from a corev1.PodSpec
 func CreatePod(ctx context.Context, p *corev1.Pod) (*entities.PodCreateReport, error) {
-	podSpec := specgen.NewPodSpecGenerator()
-	podSpec.Name = p.Namespace + "_" + p.Name
-	//cOpts := &pods.CreateOptions{}
-	//pr, err := pods.CreatePodFromSpec(ctx, podSpec, cOpts)
-	// TODO - fix this
-	pr, err := pods.CreatePodFromSpec(ctx, nil)
+	ps := entities.PodSpec{PodSpecGen: specgen.PodSpecGenerator{InfraContainerSpec: &specgen.SpecGenerator{}}}
+	ps.PodSpecGen.Name = p.Namespace + "_" + p.Name
+	pr, err := pods.CreatePodFromSpec(ctx, &ps)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +84,7 @@ func CreatePod(ctx context.Context, p *corev1.Pod) (*entities.PodCreateReport, e
 		// Container create
 		s := specgen.NewSpecGenerator(image, false)
 		s.Terminal = false
-		s.Name = podSpec.Name + "_" + container.Name
+		s.Name = ps.PodSpecGen.Name + "_" + container.Name
 		s.Pod = pr.Id
 		s.Command = container.Command
 		// TODO look into networking & ports setup
