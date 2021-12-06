@@ -74,6 +74,8 @@ func NewController(cfg *rest.Config, stopCh <-chan struct{}) *Controller {
 
 	connection, err := podman.GetConnection()
 	if err != nil {
+		klog.Errorf("%s", err)
+		klog.Error("Please check your podman socket service is started with `systemctl --user status podman.socket`")
 		os.Exit(1)
 	}
 	c.pConn = connection
