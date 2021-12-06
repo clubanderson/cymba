@@ -20,9 +20,11 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/kcp-dev/kcp/pkg/server"
 	crdhelpers "k8s.io/apiextensions-apiserver/pkg/apihelpers"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	extensionsapiserver "k8s.io/apiextensions-apiserver/pkg/apiserver"
@@ -35,6 +37,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
 
@@ -45,13 +48,16 @@ const adminClusterPath = "/clusters/172-31-37-22-6443---admin"
 
 //ApplyCRDs applies the CRDs defined in base path to the embedded API server
 func ApplyCRDs(ctx context.Context, config *rest.Config) error {
+	// need the kubeconfig to get the proper reference to the admin logical cluster
+	cfg, err := clientcmd.LoadFromFile(filepath.Join(server.DefaultConfig().RootDirectory, server.DefaultConfig().KubeConfigPath))
+	logicalClusterConfig, err := clientcmd.NewNonInteractiveClientConfig(*cfg, "admin", &clientcmd.ConfigOverrides{}, nil).ClientConfig()
+	if err != nil {
+		return err
+	}
 
-	// this is a temporary hack until we figure out what is going on with default admin cluster for apiextensionsv1client
-	savedHost := config.Host
-	config.Host = savedHost + adminClusterPath
-	apiExtensionsClient := apiextensionsv1client.NewForConfigOrDie(config).CustomResourceDefinitions()
-	config.Host = savedHost
+	apiExtensionsClient := apiextensionsv1client.NewForConfigOrDie(logicalClusterConfig).CustomResourceDefinitions()
 
+	// list of CRDs to bootstrap
 	gks := []metav1.GroupKind{
 		{
 			Group: "",
@@ -62,7 +68,7 @@ func ApplyCRDs(ctx context.Context, config *rest.Config) error {
 			Kind:  "deployments",
 		},
 	}
-	err := BootstrapCustomResourceDefinitions(ctx, apiExtensionsClient, gks)
+	err = BootstrapCustomResourceDefinitions(ctx, apiExtensionsClient, gks)
 	if err != nil {
 		return err
 	}

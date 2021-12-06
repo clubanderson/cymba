@@ -52,6 +52,8 @@ func main() {
 	if startControllerManager {
 		klog.Info("Controller manager has been enabled.")
 		srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
+			klog.Infof(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>context: %+v", context.LoopbackClientConfig)
+
 			err := crd.ApplyCRDs(ctx, context.LoopbackClientConfig)
 			if err != nil {
 				return err
