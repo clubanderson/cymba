@@ -5,13 +5,20 @@ A [kcp](https://github.com/kcp-dev/kcp)-based API server for podman hosts.
 ## Prereqs
 
 - podman version 3.2 or higher installed.
-- go version 1.16 or higher
+- go version 1.17 or higher
 - kubectl installed
+- following packages installed (to compile): device-mapper-devel gcc gpgme-devel btrfs-progs-devel 
 
 Start podman system service: (more details [here](https://podman.io/blogs/2020/08/10/podman-go-bindings.html))
 
 ```shell
 systemctl --user start podman.socket
+```
+
+make sure the service is active:
+
+```shell
+systemctl --user status podman.socket
 ```
 
 ## Quick Start
@@ -93,5 +100,14 @@ e753f6324a62  default_deployment1-g7d6h  Running  About a minute ago  7ee810576e
 Run `kubectl delete deployment --all` to remove the deployment and all pods
 
 
+## Installing on Fedora
 
+Tested on Fedora 33 & 34 (Cloud edition):
 
+Install latest version of go (1.17+) following the official [instructions](https://go.dev/doc/install)
+
+Then install packages required for compiling:
+
+```shell
+sudo dnf install -y device-mapper-devel gcc gpgme-devel btrfs-progs-devel podman
+```
