@@ -76,6 +76,11 @@ func BootstrapCustomResourceDefinitions(ctx context.Context, client apiextension
 	wg := sync.WaitGroup{}
 	bootstrapErrChan := make(chan error, len(gks))
 	for _, gk := range gks {
+		// if CRD already exist, we should not need to re-register and wait for events later on
+		found, err := client.Get(ctx, getCRDNameFromGroupKind(gk), metav1.GetOptions{})
+		if found != nil && err == nil {
+			continue
+		}
 		wg.Add(1)
 		go func(gk metav1.GroupKind) {
 			defer wg.Done()
@@ -152,4 +157,11 @@ func BootstrapCustomResourceDefinition(ctx context.Context, client apiextensions
 			}
 		}
 	}
+}
+
+func getCRDNameFromGroupKind(gk metav1.GroupKind) string {
+	if gk.Group == "" {
+		gk.Group = "core"
+	}
+	return fmt.Sprintf("%s.%s", gk.Kind, gk.Group)
 }

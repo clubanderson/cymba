@@ -57,11 +57,10 @@ POD ID  NAME    STATUS  CREATED  INFRA ID  # OF CONTAINERS
 
 (in this case I have none yet)
 
-Create the default namespace and then a sample deployment:
+Create a sample deployment:
 
 ```shell
-kubectl create ns default
-kubectl apply -f config/samples/deployment1.yaml
+kubectl apply -f config/samples/deployment.yaml
 ```
 
 Now check the status of the deployment and pods:
@@ -69,18 +68,16 @@ Now check the status of the deployment and pods:
 ```shell
 kubectl get deployment
 
-NAME          READY   UP-TO-DATE   AVAILABLE   AGE
-deployment1   4/4     4            4           56s
+NAME         READY   UP-TO-DATE   AVAILABLE   AGE
+deployment   2/2     2            2           17s
 ```
 
 ```shell
 kubectl get pods
 
-NAME                READY   STATUS    RESTARTS   AGE
-deployment1-4dnqh   0/1     Running   0          85s
-deployment1-9lzrm   0/1     Running   0          85s
-deployment1-g7d6h   0/1     Running   0          85s
-deployment1-mb6jn   0/1     Running   0          85s
+NAME               READY   STATUS    RESTARTS   AGE
+deployment-228fs   0/1     Running   0          23s
+deployment-tkf8f   0/1     Running   0          23s
 ```
 
 Check that pods are created in podman:
@@ -89,10 +86,8 @@ Check that pods are created in podman:
 podman pod ls
 
 POD ID        NAME                       STATUS   CREATED             INFRA ID      # OF CONTAINERS
-e753f6324a62  default_deployment1-g7d6h  Running  About a minute ago  7ee810576e70  2
-1d6f3dc0b3f7  default_deployment1-4dnqh  Running  About a minute ago  050762b3cb7f  2
-8a388ef93d83  default_deployment1-9lzrm  Running  About a minute ago  4aa472b875be  2
-58e3da059ff3  default_deployment1-mb6jn  Running  About a minute ago  a8a9de9d5d61  2
+6b2f001264b2  default_deployment-228fs  Running  2 minutes ago  3a5ccfb7b1ce  2
+39ae8b2081eb  default_deployment-tkf8f  Running  2 minutes ago  6983e5a785c8  2
 ```
 
 ## Cleanup

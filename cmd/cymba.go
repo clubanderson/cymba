@@ -50,21 +50,20 @@ func main() {
 
 	// Register a post-start hook that connects to the api-server
 	if startControllerManager {
+		klog.Info("Controller manager has been enabled.")
 		srv.AddPostStartHook("connect-to-api", func(context genericapiserver.PostStartHookContext) error {
 			err := crd.ApplyCRDs(ctx, context.LoopbackClientConfig)
 			if err != nil {
 				return err
 			}
 
-			if true {
-				// set up signals so we handle the first shutdown signal gracefully
-				stopCh := controllers.SetupSignalHandler()
+			// set up signals so we handle the first shutdown signal gracefully
+			stopCh := controllers.SetupSignalHandler()
 
-				go deployment.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
-				klog.Infof("Deployment controller launched")
+			go deployment.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
+			klog.Infof("Deployment controller launched")
 
-				pod.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
-			}
+			pod.NewController(context.LoopbackClientConfig, stopCh).Start(numThreads)
 
 			return nil
 		})

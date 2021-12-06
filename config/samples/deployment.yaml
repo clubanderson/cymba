@@ -1,9 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: deployment2
-  labels:
-    kcp.dev/group: group2
+  name: deployment
 spec:
   replicas: 2
   selector:
