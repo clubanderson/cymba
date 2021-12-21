@@ -13,6 +13,5 @@ podman run -v /home/ubuntu/.kcp:/kubeconfig:Z --env KUBECONFIG -it quay.io/open-
 # run the podman unshare
 podman unshare chown 10001:10001 -R /home/ubuntu/.kcp
 
-
 podman run -v /home/ubuntu/.kcp:/kubeconfig:Z --env KUBECONFIG --network="host" quay.io/open-cluster-management/registration /registration agent --cluster-name=cluster1 --kubeconfig=$KUBECONFIG
 ```
