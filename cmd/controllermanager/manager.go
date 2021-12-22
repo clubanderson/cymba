@@ -22,7 +22,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 
+	"github.com/pdettori/cymba/pkg/controllers"
 	"github.com/pdettori/cymba/pkg/controllers/deployment"
+	"github.com/pdettori/cymba/pkg/controllers/pod"
 )
 
 const numThreads = 1
@@ -45,8 +47,15 @@ func main() {
 		klog.Fatal(err)
 	}
 
-	stopCh := make(chan struct{}) // TODO: hook this up to SIGTERM/SIGINT
+	//stopCh := make(chan struct{}) // TODO: hook this up to SIGTERM/SIGINT
 
+	// set up signals so we handle the first shutdown signal gracefully
+	stopCh := controllers.SetupSignalHandler()
+
+	go deployment.NewController(r, stopCh).Start(numThreads)
+	klog.Infof("Deployment controller launched")
+
+	pod.NewController(r, stopCh).Start(numThreads)
 	deployment.NewController(r, stopCh).Start(numThreads)
 
 	<-stopCh

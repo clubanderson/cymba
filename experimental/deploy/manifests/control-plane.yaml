@@ -124,7 +124,6 @@ spec:
     - mountPath: /etc/kubernetes/pki
       name: k8s-certs
       readOnly: true
-  #hostNetwork: true
   priorityClassName: system-node-critical
   securityContext:
     seccompProfile:
