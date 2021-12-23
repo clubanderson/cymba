@@ -23,9 +23,19 @@ RUN GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o manager cmd/controller
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
-WORKDIR /
-COPY --from=builder /workspace/manager .
-USER 65532:65532
+# FROM gcr.io/distroless/static:nonroot
+# WORKDIR /
+# COPY --from=builder /workspace/manager .
+# USER 65532:65532
 
-ENTRYPOINT ["/manager"]
+# ENTRYPOINT ["/manager"]
+
+FROM fedora:35
+RUN dnf update -y
+RUN dnf -y install go device-mapper-devel gcc gpgme-devel btrfs-progs-devel podman
+
+ENV USER_UID=10001
+
+COPY --from=builder /workspace/manager /
+
+USER ${USER_UID}

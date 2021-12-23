@@ -56,7 +56,7 @@ spec:
       name: etcd-certs
   - command:
     - kube-apiserver
-    - --advertise-address=127.0.0.1
+    - --advertise-address={{ .localIP }}
     - --allow-privileged=true
     - --authorization-mode=Node,RBAC
     - --client-ca-file=/etc/kubernetes/pki/ca.crt
@@ -86,7 +86,7 @@ spec:
     image: k8s.gcr.io/kube-apiserver:v1.23.1
     ports:
     - containerPort: 6443
-      hostPort: 36443
+      hostPort: {{ .hostPort }}
     livenessProbe:
       failureThreshold: 8
       httpGet:
@@ -130,15 +130,15 @@ spec:
       type: RuntimeDefault
   volumes:
   - hostPath:
-      path: /home/ubuntu/go/src/github.com/pdettori/cymba/.kae/pki/etcd
+      path: {{ .apiserverHome }}/pki/etcd
       type: DirectoryOrCreate
     name: etcd-certs
   - hostPath:
-      path: /home/ubuntu/go/src/github.com/pdettori/cymba/.kae/pki
+      path: {{ .apiserverHome }}/pki
       type: DirectoryOrCreate
     name: k8s-certs  
   - hostPath:
-      path: /home/ubuntu/go/src/github.com/pdettori/cymba/.kae/var/lib/etcd
+      path: {{ .apiserverHome }}/var/lib/etcd
       type: DirectoryOrCreate
     name: etcd-data
 status: {}
