@@ -8,7 +8,6 @@ source ${PROJECT_HOME}/experimental/deploy/config.sh
 #               Functions
 ###############################################################################################
 
-
 create_certs() {
     mkdir -p ${APISERVER_HOME}/pki
     rm ${APISERVER_HOME}/*.conf &>/dev/null
@@ -23,8 +22,7 @@ create_boostrap() {
     mkdir -p ${APISERVER_HOME}/bootstrap
     kubectl config set-cluster hub \
     --kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig  \
-    --server=$apiserver #\
-    #--certificate-authority=${VKS_HOME}/pki/ca.crt
+    --server=$apiserver
 
     kubectl config set-credentials bootstrap \
     --kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig  \
@@ -37,6 +35,22 @@ create_boostrap() {
 
     kubectl config use-context bootstrap \
     --kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig
+}
+
+get_and_set_hub_ca() {
+  tmp_dir=$(mktemp -d -t ca-XXXXXXXXXX)
+  
+  kubectl --kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig \
+  --insecure-skip-tls-verify -n kube-public get cm cluster-info -o json | jq -r '.data.kubeconfig' > ${tmp_dir}/kubeconfig
+  
+  kubectl --kubeconfig=${tmp_dir}/kubeconfig config view --raw -o json | jq -r '.clusters[0].cluster."certificate-authority-data"'| base64 -d > ${tmp_dir}/ca.crt
+  
+  kubectl config set-cluster hub \
+    --kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig  \
+    --certificate-authority=${tmp_dir}/ca.crt \
+    --embed-certs
+    
+   rm -rf ${tmp_dir} 
 }
 
 create_dirs() {
@@ -61,7 +75,8 @@ prepare_manifests() {
         sed "s|{{ .podmanPort }}|${PODMAN_PORT}|g" |
         sed "s|{{ .localIP }}|${LOCAL_IP}|g" > ${APISERVER_HOME}/manifests/agent.yaml
 
-   cp ${PROJECT_HOME}/experimental/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests    
+   cp ${PROJECT_HOME}/experimental/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests
+   cp ${PROJECT_HOME}/experimental/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests   
 }
 
 update_kubeconfig() {
@@ -74,6 +89,34 @@ update_kubeconfig() {
 start_control_plane() {
   podman pod rm -f control-plane &> /dev/null
   podman play kube ${APISERVER_HOME}/manifests/control-plane.yaml
+}
+
+check_control_plane_up() {
+    echo "checking control plane is up..."
+    echo "press CTRL+C to exit"
+    for (( ; ; ))
+    do
+        echo -n "."
+        kubectl --kubeconfig=${APISERVER_HOME}/admin.conf cluster-info &> /dev/null
+        if [ "$?" -eq 0 ]; then
+            echo ""
+            echo "control plane ready!"
+            kubectl --kubeconfig=${APISERVER_HOME}/admin.conf cluster-info
+            break
+        fi
+        sleep 2
+    done
+}
+
+configure_control_plane() {
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_namespace.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_appliedmanifestworks.crd.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_clusters.open-cluster-management.io_clusterclaims.crd.yaml
+}
+
+start_agent() {
+  podman pod rm -f agent &> /dev/null
+  podman play kube ${APISERVER_HOME}/manifests/agent.yaml
 }
 
 
@@ -117,6 +160,8 @@ create_certs
 
 create_boostrap $apiserver $token
 
+get_and_set_hub_ca
+
 create_dirs
 
 local_ip=$(get_local_ip)
@@ -126,3 +171,9 @@ prepare_manifests $local_ip
 update_kubeconfig $local_ip $HOST_PORT
 
 start_control_plane
+
+check_control_plane_up
+
+configure_control_plane
+
+start_agent
