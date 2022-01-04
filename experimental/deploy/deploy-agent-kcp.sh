@@ -4,9 +4,29 @@ PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/../.. && pwd )"
 
 source ${PROJECT_HOME}/experimental/deploy/config.sh
 
+APISERVER_HOME=${PROJECT_HOME}/.kcp
+
+KCP_PORT=6443
+
 ###############################################################################################
 #               Functions
 ###############################################################################################
+
+start_cymba() {
+  mkdir -p ${APISERVER_HOME}
+  # TODO - this should become a system service 
+  # restart if already running
+  if test -f "${APISERVER_HOME}/kcp.pid"; then
+      echo "kcp pid exists, restarting..."
+      pid=$(cat ${APISERVER_HOME}/kcp.pid)
+      kill $pid 
+  fi
+  ${PROJECT_HOME}/bin/cymba &> ${APISERVER_HOME}/kcp.log &
+  kcpPid=$!
+  echo "KCP started with pid=${kcpPid}"
+  echo ${kcpPid} > ${APISERVER_HOME}/kcp.pid
+}
+
 
 create_certs() {
     mkdir -p ${APISERVER_HOME}/pki
@@ -54,24 +74,15 @@ get_and_set_hub_ca() {
 }
 
 create_dirs() {
-  mkdir -p ${APISERVER_HOME}/var/lib/etcd
   mkdir -p ${APISERVER_HOME}/hub
-}
-
-get_local_ip() {
-  ip route get 1 | sed -n 's/^.*src \([0-9.]*\) .*$/\1/p'
 }
 
 prepare_manifests() {
    LOCAL_IP=$1
    CLUSTER_NAME=$2
    mkdir -p ${APISERVER_HOME}/manifests
-   cat ${PROJECT_HOME}/experimental/deploy/manifests/control-plane.yaml | \
-        sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
-        sed "s|{{ .localIP }}|${LOCAL_IP}|g" |
-        sed "s|{{ .hostPort }}|${HOST_PORT}|g" > ${APISERVER_HOME}/manifests/control-plane.yaml
-
-   cat ${PROJECT_HOME}/experimental/deploy/manifests/agent.yaml | \
+  
+   cat ${PROJECT_HOME}/experimental/deploy/manifests/agent-kcp.yaml | \
         sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
         sed "s|{{ .podmanPort }}|${PODMAN_PORT}|g" |
         sed "s|{{ .clusterName }}|${CLUSTER_NAME}|g" |
@@ -81,11 +92,55 @@ prepare_manifests() {
    cp ${PROJECT_HOME}/experimental/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests   
 }
 
+configure_control_plane() {
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_00_namespace.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_01_kcp_namespace.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_00_appliedmanifestworks.crd.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_00_clusters.open-cluster-management.io_clusterclaims.crd.yaml
+}
+
+create_api_server_extension_cm() {
+  tmp_dir=$(mktemp -d -t certs-XXXXXXXXXX)
+  
+  cp ${APISERVER_HOME}/secrets/ca/cert.pem ${tmp_dir}/ca.crt
+  cp ${APISERVER_HOME}/secrets/ca/key.pem ${tmp_dir}/ca.key
+
+  kubeadm init phase certs front-proxy-ca --cert-dir=${tmp_dir}
+
+  echo "created in ${tmp_dir}"
+
+  mv ${tmp_dir}/ca.crt ${tmp_dir}/client-ca-file
+  mv ${tmp_dir}/front-proxy-ca.crt ${tmp_dir}/requestheader-client-ca-file
+
+  # if present, remove existing cm
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig delete configmap extension-apiserver-authentication \
+   --namespace kube-system 
+
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig create configmap extension-apiserver-authentication \
+   --namespace kube-system \
+   --from-file=${tmp_dir}/client-ca-file \
+   --from-file=${tmp_dir}/requestheader-client-ca-file \
+   --from-literal=requestheader-allowed-names='["front-proxy-client"]' \
+   --from-literal=requestheader-extra-headers-prefix='["X-Remote-Extra-"]' \
+   --from-literal=requestheader-group-headers='["X-Remote-Group"]' \
+   --from-literal=requestheader-username-headers='["X-Remote-User"]'
+    
+  rm -rf ${tmp_dir} 
+}
+
+get_local_ip() {
+  ip route get 1 | sed -n 's/^.*src \([0-9.]*\) .*$/\1/p'
+}
+
+
 update_kubeconfig() {
     IP=$1
     PORT=$2
-    CURRENT_SERVER=$(cat ${APISERVER_HOME}/admin.conf | grep server: | awk '{print $2}')
-    sed "s|${CURRENT_SERVER}|https://${IP}:${PORT}|g" ${APISERVER_HOME}/admin.conf -i""
+    CURRENT_SERVER=$(cat ${APISERVER_HOME}/admin.kubeconfig | grep server: | awk '{print $2}' | head -n 1)
+    INPUT="$(cat ${APISERVER_HOME}/admin.kubeconfig)"
+    OUTPUT=${INPUT//"${CURRENT_SERVER}"/https://${IP}:${PORT}}
+    echo "${OUTPUT}" > ${APISERVER_HOME}/admin.kubeconfig
+
 }
 
 start_control_plane() {
@@ -99,25 +154,18 @@ check_control_plane_up() {
     for (( ; ; ))
     do
         echo -n "."
-        kubectl --kubeconfig=${APISERVER_HOME}/admin.conf cluster-info &> /dev/null
+        kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig get apiservices &> /dev/null
         if [ "$?" -eq 0 ]; then
             echo ""
             echo "control plane ready!"
-            kubectl --kubeconfig=${APISERVER_HOME}/admin.conf cluster-info
             break
         fi
         sleep 2
     done
 }
 
-configure_control_plane() {
-  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_namespace.yaml
-  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_appliedmanifestworks.crd.yaml
-  kubectl --kubeconfig=${APISERVER_HOME}/admin.conf apply -f ${APISERVER_HOME}/manifests/0000_00_clusters.open-cluster-management.io_clusterclaims.crd.yaml
-}
-
 start_agent() {
-  podman pod rm -f agent &> /dev/null
+  podman pod rm -f agent-kcp &> /dev/null
   podman play kube ${APISERVER_HOME}/manifests/agent.yaml
 }
 
@@ -158,7 +206,9 @@ while true; do
   esac
 done
 
-create_certs
+start_cymba
+
+check_control_plane_up
 
 create_boostrap $apiserver $token
 
@@ -170,12 +220,22 @@ local_ip=$(get_local_ip)
 
 prepare_manifests $local_ip $name
 
-update_kubeconfig $local_ip $HOST_PORT
-
-start_control_plane
-
-check_control_plane_up
-
 configure_control_plane
 
+create_api_server_extension_cm
+
+update_kubeconfig $local_ip $KCP_PORT
+
 start_agent
+
+
+
+# local_ip=$(get_local_ip)
+
+# prepare_manifests $local_ip
+
+# update_kubeconfig $local_ip $HOST_PORT
+
+# configure_control_plane
+
+# start_agent

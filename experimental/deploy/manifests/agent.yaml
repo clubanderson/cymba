@@ -9,7 +9,7 @@ spec:
     args:
       - "/registration"
       - "agent"
-      - "--cluster-name=podman2"
+      - "--cluster-name={{ .clusterName }}"
       - "--bootstrap-kubeconfig=/spoke/bootstrap/kubeconfig"
       - "--kubeconfig=/etc/kubernetes/admin.conf"
       - "--namespace=open-cluster-management-agent"
@@ -33,7 +33,7 @@ spec:
     args:
       - "/work"
       - "agent"
-      - "--spoke-cluster-name=podman2"
+      - "--spoke-cluster-name={{ .clusterName }}"
       - "--hub-kubeconfig=/spoke/hub-kubeconfig/kubeconfig"
       - "--kubeconfig=/etc/kubernetes/admin.conf"
       - "--namespace=open-cluster-management-agent"
