@@ -1,8 +1,8 @@
 #!/bin/bash
 
-PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/../.. && pwd )"
+PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
-source ${PROJECT_HOME}/experimental/deploy/config.sh
+source ${PROJECT_HOME}/deploy/config.sh
 
 APISERVER_HOME=${PROJECT_HOME}/.kcp
 
@@ -82,15 +82,15 @@ prepare_manifests() {
    CLUSTER_NAME=$2
    mkdir -p ${APISERVER_HOME}/manifests
   
-   cat ${PROJECT_HOME}/experimental/deploy/manifests/agent-kcp.yaml | \
+   cat ${PROJECT_HOME}/deploy/manifests/agent-kcp.yaml | \
         sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
         sed "s|{{ .podmanPort }}|${PODMAN_PORT}|g" |
         sed "s|{{ .clusterName }}|${CLUSTER_NAME}|g" |
         sed "s|{{ .localIP }}|${LOCAL_IP}|g" > ${APISERVER_HOME}/manifests/agent.yaml
 
-   cp ${PROJECT_HOME}/experimental/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests
-   cp ${PROJECT_HOME}/experimental/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests
-   cp ${PROJECT_HOME}/experimental/deploy/manifests/_nodes.yaml ${APISERVER_HOME}/manifests   
+   cp ${PROJECT_HOME}/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests
+   cp ${PROJECT_HOME}/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests
+   cp ${PROJECT_HOME}/deploy/manifests/_nodes.yaml ${APISERVER_HOME}/manifests   
 }
 
 configure_control_plane() {

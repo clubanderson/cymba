@@ -27,7 +27,29 @@ spec:
     - name: hub-kubeconfig
       mountPath: "/spoke/hub-kubeconfig"
     - name: spoke-kubeconfig
-      mountPath: "/etc/kubernetes"   
+      mountPath: "/etc/kubernetes"
+  - name: work-agent
+    image: quay.io/open-cluster-management/work
+    args:
+      - "/work"
+      - "agent"
+      - "--spoke-cluster-name={{ .clusterName }}"
+      - "--hub-kubeconfig=/spoke/hub-kubeconfig/kubeconfig"
+      - "--kubeconfig=/etc/kubernetes/admin.kubeconfig"
+      - "--namespace=open-cluster-management-agent"
+      - "--listen=0.0.0.0:9443"
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      privileged: false
+      runAsNonRoot: true
+    volumeMounts:
+    - name: hub-kubeconfig
+      mountPath: "/spoke/hub-kubeconfig"
+    - name: spoke-kubeconfig
+      mountPath: "/etc/kubernetes"      
   volumes:
   - hostPath:
       path: {{ .apiserverHome }}/bootstrap
@@ -40,4 +62,4 @@ spec:
   - hostPath:      
       path: {{ .apiserverHome }}/hub
       type: DirectoryOrCreate
-    name: hub-kubeconfig  
+    name: hub-kubeconfig
