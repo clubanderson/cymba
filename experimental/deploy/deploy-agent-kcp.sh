@@ -89,7 +89,8 @@ prepare_manifests() {
         sed "s|{{ .localIP }}|${LOCAL_IP}|g" > ${APISERVER_HOME}/manifests/agent.yaml
 
    cp ${PROJECT_HOME}/experimental/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests
-   cp ${PROJECT_HOME}/experimental/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests   
+   cp ${PROJECT_HOME}/experimental/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests
+   cp ${PROJECT_HOME}/experimental/deploy/manifests/_nodes.yaml ${APISERVER_HOME}/manifests   
 }
 
 configure_control_plane() {
@@ -97,6 +98,7 @@ configure_control_plane() {
   kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_01_kcp_namespace.yaml
   kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_00_appliedmanifestworks.crd.yaml
   kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/0000_00_clusters.open-cluster-management.io_clusterclaims.crd.yaml
+  kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig apply -f ${APISERVER_HOME}/manifests/_nodes.yaml
 }
 
 create_api_server_extension_cm() {
@@ -114,7 +116,7 @@ create_api_server_extension_cm() {
 
   # if present, remove existing cm
   kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig delete configmap extension-apiserver-authentication \
-   --namespace kube-system 
+   --namespace kube-system &> /dev/null
 
   kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig create configmap extension-apiserver-authentication \
    --namespace kube-system \

@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
   - name: spoke-agent
-    image: quay.io/open-cluster-management/registration
+    image: quay.io/pdettori/registration
     args:
       - "/registration"
       - "agent"
