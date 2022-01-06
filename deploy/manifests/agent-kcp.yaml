@@ -11,7 +11,7 @@ spec:
       - "agent"
       - "--cluster-name={{ .clusterName }}"
       - "--bootstrap-kubeconfig=/spoke/bootstrap/kubeconfig"
-      - "--kubeconfig=/etc/kubernetes/admin.kubeconfig"
+      - "--kubeconfig=/etc/kubernetes/admin.kubeconfig.unshared"
       - "--namespace=open-cluster-management-agent"
     securityContext:
       allowPrivilegeEscalation: false
@@ -27,7 +27,7 @@ spec:
     - name: hub-kubeconfig
       mountPath: "/spoke/hub-kubeconfig"
     - name: spoke-kubeconfig
-      mountPath: "/etc/kubernetes"
+      mountPath: "/etc/kubernetes/admin.kubeconfig.unshared"
   - name: work-agent
     image: quay.io/open-cluster-management/work
     args:
@@ -35,7 +35,7 @@ spec:
       - "agent"
       - "--spoke-cluster-name={{ .clusterName }}"
       - "--hub-kubeconfig=/spoke/hub-kubeconfig/kubeconfig"
-      - "--kubeconfig=/etc/kubernetes/admin.kubeconfig"
+      - "--kubeconfig=/etc/kubernetes/admin.kubeconfig.unshared"
       - "--namespace=open-cluster-management-agent"
       - "--listen=0.0.0.0:9443"
     securityContext:
@@ -49,14 +49,14 @@ spec:
     - name: hub-kubeconfig
       mountPath: "/spoke/hub-kubeconfig"
     - name: spoke-kubeconfig
-      mountPath: "/etc/kubernetes"      
+      mountPath: "/etc/kubernetes/admin.kubeconfig.unshared"      
   volumes:
   - hostPath:
       path: {{ .apiserverHome }}/bootstrap
       type: DirectoryOrCreate
     name: bootstrap-secret
   - hostPath:
-      path: {{ .apiserverHome }}
+      path: {{ .apiserverHome }}/admin.kubeconfig.unshared
       type: DirectoryOrCreate
     name: spoke-kubeconfig  
   - hostPath:      

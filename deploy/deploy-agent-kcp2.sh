@@ -7,6 +7,12 @@ source ${PROJECT_HOME}/deploy/config.sh
 APISERVER_HOME=${PROJECT_HOME}/.kcp
 
 KCP_PORT=6443
+CYMBA_IMAGE=quay.io/pdettori/cymba
+CYMBA_EXEC=/cymba
+REGISTRATION_IMAGE=quay.io/pdettori/registration
+REGISTRATION_EXEC=/registration
+WORK_IMAGE=quay.io/open-cluster-management/work
+WORK_EXEC=/work
 
 ###############################################################################################
 #               Functions
@@ -74,13 +80,13 @@ get_and_set_hub_ca() {
 }
 
 create_dirs() {
+  mkdir -p ${APISERVER_HOME}/manifests
   mkdir -p ${APISERVER_HOME}/hub
 }
 
 prepare_manifests() {
    LOCAL_IP=$1
    CLUSTER_NAME=$2
-   mkdir -p ${APISERVER_HOME}/manifests
   
    cat ${PROJECT_HOME}/deploy/manifests/agent-kcp.yaml | \
         sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
@@ -174,6 +180,57 @@ start_agent() {
   podman play kube ${APISERVER_HOME}/manifests/agent.yaml
 }
 
+extract_exec() {
+  image=$1
+  sourcePath=$2
+  mkdir -p ${APISERVER_HOME}/bin
+  containerId=$(podman create $image)  
+  podman cp ${containerId}:${sourcePath} ${APISERVER_HOME}/bin/${sourcePath}
+  podman rm ${containerId}
+}
+
+generate_cymba_command() {
+   echo ${PROJECT_HOME}/bin/cymba
+}
+
+generate_registration_command() {
+   clusterName=$1
+   echo ${APISERVER_HOME}/bin/registration agent \
+    --cluster-name=${clusterName} \
+    --bootstrap-kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig \
+    --hub-kubeconfig-dir=${APISERVER_HOME}/hub \
+    --kubeconfig=${APISERVER_HOME}/admin.kubeconfig \
+    --namespace=open-cluster-management-agent
+}
+
+generate_work_command() {
+   clusterName=$1
+   echo ${APISERVER_HOME}/bin/work agent \
+    --spoke-cluster-name==${clusterName} \
+    --hub-kubeconfig=${APISERVER_HOME}/hub/kubeconfig \
+    --kubeconfig=${APISERVER_HOME}/admin.kubeconfig \
+    --namespace=open-cluster-management-agent \
+    --listen=0.0.0.0:9443
+}
+
+
+create_systemd_unit() {
+ description=$1
+ after=$2
+ user=$(whoami)
+ execStart=$3
+ env="PODMAN_URL=unix:///run/user/$(id -u $(whoami))/podman/podman.sock"
+
+ cat ${PROJECT_HOME}/deploy/manifests/systemd.service | \
+        sed "s|{{ .description }}|${description}|g" |
+        sed "s|{{ .after }}|${after}|g" |
+        sed "s|{{ .user }}|${user}|g" |
+        sed "s|{{ .workingDir }}|${PROJECT_HOME}|g" |
+        sed "s|{{ .environment }}|\"${env}\"|g" |
+        sed "s|{{ .execStart }}|${execStart}|g" > ${APISERVER_HOME}/manifests/${description}.service
+  sudo cp ${APISERVER_HOME}/manifests/${description}.service /etc/systemd/system/${description}.service
+}
+
 
 ###########################################################################################
 #                   Main   
@@ -211,15 +268,23 @@ while true; do
   esac
 done
 
-start_cymba
+create_dirs
+
+regExec=$(generate_cymba_command)
+
+create_systemd_unit cymba network.target "${regExec}"
+
+sudo systemctl daemon-reload
+
+sudo systemctl enable cymba.service
+
+sudo systemctl start cymba.service
 
 check_control_plane_up
 
 create_boostrap $apiserver $token
 
 get_and_set_hub_ca
-
-create_dirs
 
 local_ip=$(get_local_ip)
 
@@ -231,8 +296,22 @@ create_api_server_extension_cm
 
 update_kubeconfig $local_ip $KCP_PORT
 
-unshare_dirs
+extract_exec ${REGISTRATION_IMAGE} ${REGISTRATION_EXEC}
 
-start_agent
+extract_exec ${WORK_IMAGE} ${WORK_EXEC}
 
+regExec=$(generate_registration_command ${name})
 
+create_systemd_unit ocm-registration "network.target cymba.service" "${regExec}"
+
+regExec=$(generate_work_command ${name})
+
+create_systemd_unit ocm-work "network.target ocm-registration.service" "${regExec}"
+
+sudo systemctl daemon-reload
+
+sudo systemctl enable ocm-registration.service
+sudo systemctl enable ocm-work.service
+
+sudo systemctl start ocm-registration.service
+sudo systemctl start ocm-work.service
