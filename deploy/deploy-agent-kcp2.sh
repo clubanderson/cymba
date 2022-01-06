@@ -190,12 +190,16 @@ extract_exec() {
 }
 
 generate_cymba_command() {
-   echo ${PROJECT_HOME}/bin/cymba
+   sudo systemctl kill cymba.service &>/dev/null
+   sudo cp ${PROJECT_HOME}/bin/cymba /usr/local/bin/cymba
+   echo /usr/local/bin/cymba
 }
 
 generate_registration_command() {
    clusterName=$1
-   echo ${APISERVER_HOME}/bin/registration agent \
+   sudo systemctl stop ocm-registration.service
+   sudo cp ${APISERVER_HOME}/bin/registration /usr/local/bin/registration
+   echo /usr/local/bin/registration agent \
     --cluster-name=${clusterName} \
     --bootstrap-kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig \
     --hub-kubeconfig-dir=${APISERVER_HOME}/hub \
@@ -205,7 +209,9 @@ generate_registration_command() {
 
 generate_work_command() {
    clusterName=$1
-   echo ${APISERVER_HOME}/bin/work agent \
+   sudo systemctl stop ocm-work.service
+   sudo cp ${APISERVER_HOME}/bin/work /usr/local/bin/work
+   echo /usr/local/bin/work agent \
     --spoke-cluster-name==${clusterName} \
     --hub-kubeconfig=${APISERVER_HOME}/hub/kubeconfig \
     --kubeconfig=${APISERVER_HOME}/admin.kubeconfig \
