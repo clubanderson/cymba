@@ -7,33 +7,62 @@ source ${PROJECT_HOME}/deploy/config.sh
 APISERVER_HOME=${PROJECT_HOME}/.kcp
 
 KCP_PORT=6443
+CYMBA_IMAGE=quay.io/pdettori/cymba
+CYMBA_EXEC=/cymba
+REGISTRATION_IMAGE=quay.io/pdettori/registration
+REGISTRATION_EXEC=/registration
+WORK_IMAGE=quay.io/open-cluster-management/work
+WORK_EXEC=/work
 
 ###############################################################################################
 #               Functions
 ###############################################################################################
 
-start_cymba() {
-  mkdir -p ${APISERVER_HOME}
-  # TODO - this should become a system service 
-  # restart if already running
-  if test -f "${APISERVER_HOME}/kcp.pid"; then
-      echo "kcp pid exists, restarting..."
-      pid=$(cat ${APISERVER_HOME}/kcp.pid)
-      kill $pid 
-  fi
-  ${PROJECT_HOME}/bin/cymba &> ${APISERVER_HOME}/kcp.log &
-  kcpPid=$!
-  echo "KCP started with pid=${kcpPid}"
-  echo ${kcpPid} > ${APISERVER_HOME}/kcp.pid
+create_dirs() {
+  mkdir -p ${APISERVER_HOME}/manifests
+  mkdir -p ${APISERVER_HOME}/hub
 }
 
+generate_cymba_command() {
+   systemctl is-active --quiet cymba.service
+   if [ "$?" -eq 0 ]; then
+    sudo systemctl stop cymba.service 
+   fi
+   sudo cp ${PROJECT_HOME}/bin/cymba /usr/local/bin/cymba
+   echo /usr/local/bin/cymba
+}
 
-create_certs() {
-    mkdir -p ${APISERVER_HOME}/pki
-    rm ${APISERVER_HOME}/*.conf &>/dev/null
-    kubeadm init phase certs --cert-dir=${APISERVER_HOME}/pki all
-    kubeadm init phase kubeconfig --cert-dir=${APISERVER_HOME}/pki --kubeconfig-dir=${APISERVER_HOME} admin
-    kubeadm init phase kubeconfig --cert-dir=${APISERVER_HOME}/pki --kubeconfig-dir=${APISERVER_HOME} controller-manager
+create_systemd_unit() {
+ description=$1
+ after=$2
+ user=$(whoami)
+ execStart=$3
+ env="PODMAN_URL=unix:///run/user/$(id -u $(whoami))/podman/podman.sock"
+
+ cat ${PROJECT_HOME}/deploy/manifests/systemd.service | \
+        sed "s|{{ .description }}|${description}|g" |
+        sed "s|{{ .after }}|${after}|g" |
+        sed "s|{{ .user }}|${user}|g" |
+        sed "s|{{ .workingDir }}|${PROJECT_HOME}|g" |
+        sed "s|{{ .environment }}|\"${env}\"|g" |
+        sed "s|{{ .execStart }}|${execStart}|g" > ${APISERVER_HOME}/manifests/${description}.service
+  sudo cp ${APISERVER_HOME}/manifests/${description}.service /etc/systemd/system/${description}.service
+}
+
+check_control_plane_up() {
+    echo "checking control plane is up..."
+    echo "press CTRL+C to exit"
+    for (( ; ; ))
+    do
+        echo -n "."
+        kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig get apiservices &> /dev/null
+        if [ "$?" -eq 0 ]; then
+            echo ""
+            echo "control plane ready!"
+            break
+        fi
+        sleep 2
+    done
 }
 
 create_boostrap() {
@@ -73,14 +102,13 @@ get_and_set_hub_ca() {
    rm -rf ${tmp_dir} 
 }
 
-create_dirs() {
-  mkdir -p ${APISERVER_HOME}/hub
+get_local_ip() {
+  ip route get 1 | sed -n 's/^.*src \([0-9.]*\) .*$/\1/p'
 }
 
 prepare_manifests() {
    LOCAL_IP=$1
    CLUSTER_NAME=$2
-   mkdir -p ${APISERVER_HOME}/manifests
   
    cat ${PROJECT_HOME}/deploy/manifests/agent-kcp.yaml | \
         sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
@@ -130,11 +158,6 @@ create_api_server_extension_cm() {
   rm -rf ${tmp_dir} 
 }
 
-get_local_ip() {
-  ip route get 1 | sed -n 's/^.*src \([0-9.]*\) .*$/\1/p'
-}
-
-
 update_kubeconfig() {
     IP=$1
     PORT=$2
@@ -142,38 +165,46 @@ update_kubeconfig() {
     INPUT="$(cat ${APISERVER_HOME}/admin.kubeconfig)"
     OUTPUT=${INPUT//"${CURRENT_SERVER}"/https://${IP}:${PORT}}
     echo "${OUTPUT}" > ${APISERVER_HOME}/admin.kubeconfig
-
 }
 
-# need to unshare dirs for podman
-unshare_dirs() {
-  cp ${APISERVER_HOME}/admin.kubeconfig ${APISERVER_HOME}/admin.kubeconfig.unshared
-  podman unshare chown 10001:10001 -R ${APISERVER_HOME}/bootstrap/
-  podman unshare chown 10001:10001 -R ${APISERVER_HOME}/hub/
-  podman unshare chown 10001:10001 -R ${APISERVER_HOME}/admin.kubeconfig.unshared
+extract_exec() {
+  image=$1
+  sourcePath=$2
+  mkdir -p ${APISERVER_HOME}/bin
+  containerId=$(podman create $image)  
+  podman cp ${containerId}:${sourcePath} ${APISERVER_HOME}/bin/${sourcePath}
+  podman rm ${containerId}
 }
 
-check_control_plane_up() {
-    echo "checking control plane is up..."
-    echo "press CTRL+C to exit"
-    for (( ; ; ))
-    do
-        echo -n "."
-        kubectl --kubeconfig=${APISERVER_HOME}/admin.kubeconfig get apiservices &> /dev/null
-        if [ "$?" -eq 0 ]; then
-            echo ""
-            echo "control plane ready!"
-            break
-        fi
-        sleep 2
-    done
+generate_registration_command() {
+   clusterName=$1
+   systemctl is-active --quiet ocm-registration.service
+   if [ "$?" -eq 0 ]; then
+    sudo systemctl stop ocm-registration.service
+   fi
+   sudo cp ${APISERVER_HOME}/bin/registration /usr/local/bin/registration
+   echo /usr/local/bin/registration agent \
+    --cluster-name=${clusterName} \
+    --bootstrap-kubeconfig=${APISERVER_HOME}/bootstrap/kubeconfig \
+    --hub-kubeconfig-dir=${APISERVER_HOME}/hub \
+    --kubeconfig=${APISERVER_HOME}/admin.kubeconfig \
+    --namespace=open-cluster-management-agent
 }
 
-start_agent() {
-  podman pod rm -f agent-kcp &> /dev/null
-  podman play kube ${APISERVER_HOME}/manifests/agent.yaml
+generate_work_command() {
+   clusterName=$1
+   systemctl is-active --quiet ocm-work.service
+   if [ "$?" -eq 0 ]; then
+    sudo systemctl stop ocm-work.service
+   fi
+   sudo cp ${APISERVER_HOME}/bin/work /usr/local/bin/work
+   echo /usr/local/bin/work agent \
+    --spoke-cluster-name=${clusterName} \
+    --hub-kubeconfig=${APISERVER_HOME}/hub/kubeconfig \
+    --kubeconfig=${APISERVER_HOME}/admin.kubeconfig \
+    --namespace=open-cluster-management-agent \
+    --listen=0.0.0.0:9443
 }
-
 
 ###########################################################################################
 #                   Main   
@@ -211,15 +242,23 @@ while true; do
   esac
 done
 
-start_cymba
+create_dirs
+
+regExec=$(generate_cymba_command)
+
+create_systemd_unit cymba network.target "${regExec}"
+
+sudo systemctl daemon-reload
+
+sudo systemctl enable cymba.service
+
+sudo systemctl start cymba.service
 
 check_control_plane_up
 
 create_boostrap $apiserver $token
 
 get_and_set_hub_ca
-
-create_dirs
 
 local_ip=$(get_local_ip)
 
@@ -231,8 +270,22 @@ create_api_server_extension_cm
 
 update_kubeconfig $local_ip $KCP_PORT
 
-unshare_dirs
+extract_exec ${REGISTRATION_IMAGE} ${REGISTRATION_EXEC}
 
-start_agent
+extract_exec ${WORK_IMAGE} ${WORK_EXEC}
 
+regExec=$(generate_registration_command ${name})
 
+create_systemd_unit ocm-registration "network.target cymba.service" "${regExec}"
+
+regExec=$(generate_work_command ${name})
+
+create_systemd_unit ocm-work "network.target ocm-registration.service" "${regExec}"
+
+sudo systemctl daemon-reload
+
+sudo systemctl enable ocm-registration.service
+sudo systemctl enable ocm-work.service
+
+sudo systemctl start ocm-registration.service
+sudo systemctl start ocm-work.service
