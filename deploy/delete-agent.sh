@@ -52,8 +52,6 @@ remove_system_services() {
 #                   Main   
 ###########################################################################################
 
-delete_dir
-
 delete_agent
 
 stop_system_services
@@ -61,5 +59,7 @@ stop_system_services
 disable_system_services
 
 remove_system_services
+
+delete_dir
 
 
