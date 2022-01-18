@@ -1,8 +1,4 @@
-FROM fedora:35 as builder
-
-RUN dnf update -y
-RUN dnf -y install go device-mapper-devel gcc gpgme-devel btrfs-progs-devel podman
-
+FROM golang:1.16 as builder
 WORKDIR /workspace
 
 COPY go.mod go.mod
@@ -13,13 +9,15 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY pkg/ pkg/
 
-RUN GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o cymba cmd/cymba.go
+ENV REMOTETAGS="remote exclude_graphdriver_btrfs btrfs_noversion exclude_graphdriver_devicemapper containers_image_openpgp"
+RUN GOOS=linux GOARCH=amd64 go build -tags "$REMOTETAGS" -o cymba cmd/cymba.go
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+FROM gcr.io/distroless/static:nonroot
 ENV USER_UID=10001
-
+WORKDIR /
 COPY --from=builder /workspace/cymba /
-
-RUN microdnf update && microdnf clean all
+COPY deploy/ deploy/
 
 USER ${USER_UID}
+
+ENTRYPOINT ["/cymba"]

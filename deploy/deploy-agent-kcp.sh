@@ -2,10 +2,6 @@
 
 PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
-source ${PROJECT_HOME}/deploy/config.sh
-
-APISERVER_HOME=${PROJECT_HOME}/.kcp
-
 KCP_PORT=6443
 CYMBA_IMAGE=quay.io/pdettori/cymba
 CYMBA_EXEC=/cymba
@@ -14,9 +10,38 @@ REGISTRATION_EXEC=/registration
 WORK_IMAGE=quay.io/open-cluster-management/work
 WORK_EXEC=/work
 
+echo ${PROJECT_HOME} | grep cymba > /dev/null
+if [ "$?" -ne 0 ]; then 
+  echo "not running in context"
+  APISERVER_HOME=${HOME}/.kcp
+  PROJECT_HOME=${HOME}
+  IN_CTX=false
+else  
+  echo "running in context"
+  APISERVER_HOME=${PROJECT_HOME}/.kcp
+fi  
+
 ###############################################################################################
 #               Functions
 ###############################################################################################
+
+install_missing_deps() {
+  kubectl --help &> /dev/null
+  if [ "$?" -ne 0 ]; then
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod a+x kubectl
+    sudo mv kubectl /usr/local/bin
+  fi
+
+  kubeadm --help &> /dev/null
+  if [ "$?" -ne 0 ]; then
+    RELEASE="$(curl -sSL https://dl.k8s.io/release/stable.txt)"
+    ARCH="amd64"
+    curl -LO --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${RELEASE}/bin/linux/${ARCH}/kubeadm
+    chmod a+x kubeadm
+    sudo mv kubeadm /usr/local/bin
+  fi  
+}
 
 create_dirs() {
   mkdir -p ${APISERVER_HOME}/manifests
@@ -28,7 +53,7 @@ generate_cymba_command() {
    if [ "$?" -eq 0 ]; then
     sudo systemctl stop cymba.service 
    fi
-   sudo cp ${PROJECT_HOME}/bin/cymba /usr/local/bin/cymba
+   sudo cp ${APISERVER_HOME}/bin/cymba /usr/local/bin/cymba
    echo /usr/local/bin/cymba
 }
 
@@ -176,6 +201,14 @@ extract_exec() {
   podman rm ${containerId}
 }
 
+extract_manifests() {
+  image=$1
+  sourcePath=$2
+  containerId=$(podman create $image)  
+  podman cp ${containerId}:${sourcePath} ${PROJECT_HOME}
+  podman rm ${containerId}
+}
+
 generate_registration_command() {
    clusterName=$1
    systemctl is-active --quiet ocm-registration.service
@@ -242,7 +275,15 @@ while true; do
   esac
 done
 
+install_missing_deps
+
 create_dirs
+
+if [ $IN_CTX == "false" ]; then
+   extract_manifests ${CYMBA_IMAGE} deploy
+fi   
+
+extract_exec ${CYMBA_IMAGE} ${CYMBA_EXEC}
 
 regExec=$(generate_cymba_command)
 
