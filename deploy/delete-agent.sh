@@ -56,7 +56,7 @@ remove_system_services() {
   sudo rm /etc/systemd/system/ocm-registration.service
   sudo rm /etc/systemd/system/ocm-work.service
   sudo systemctl daemon-reload
-  systemctl reset-failed
+  sudo systemctl reset-failed
 }
 
 

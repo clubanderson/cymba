@@ -43,7 +43,38 @@ install_missing_deps() {
     curl -LO --remote-name-all https://storage.googleapis.com/kubernetes-release/release/${RELEASE}/bin/linux/${ARCH}/kubeadm
     chmod a+x kubeadm
     sudo mv kubeadm /usr/local/bin
-  fi  
+  fi
+
+  jq -h &> /dev/null
+  if [ "$?" -ne 0 ]; then
+    curl -LO --remote-name-all https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+    chmod a+x jq-linux64
+    sudo mv jq-linux64 /usr/local/bin/jq
+  fi
+
+  podman --help &> /dev/null
+  if [ "$?" -ne 0 ]; then
+    echo "podman not installed, trying to install"
+    distro=$(cat /etc/*-release | grep '^NAME' | awk '{split($0,a,"="); print a[2]'})
+    case $distro in
+      Fedora)
+        echo "Installing podman on Fedora..."
+        sudo dnf install -y podman
+      ;;
+      *)
+        echo "cannot find podman for distro $distro - please install manually podman"
+        exit -1
+      ;;
+    esac
+  fi
+}
+
+enable_podman() {
+  systemctl is-active --quiet cymba.service &> /dev/null
+  if [ "$?" -ne 0 ]; then
+    systemctl enable --user podman.socket
+    systemctl start --user podman.socket
+  fi
 }
 
 create_dirs() {
@@ -134,16 +165,7 @@ get_local_ip() {
   ip route get 1 | sed -n 's/^.*src \([0-9.]*\) .*$/\1/p'
 }
 
-prepare_manifests() {
-   LOCAL_IP=$1
-   CLUSTER_NAME=$2
-  
-   cat ${PROJECT_HOME}/deploy/manifests/agent-kcp.yaml | \
-        sed "s|{{ .apiserverHome }}|${APISERVER_HOME}|g" |
-        sed "s|{{ .podmanPort }}|${PODMAN_PORT}|g" |
-        sed "s|{{ .clusterName }}|${CLUSTER_NAME}|g" |
-        sed "s|{{ .localIP }}|${LOCAL_IP}|g" > ${APISERVER_HOME}/manifests/agent.yaml
-
+prepare_manifests() {  
    cp ${PROJECT_HOME}/deploy/manifests/*.crd.yaml ${APISERVER_HOME}/manifests
    cp ${PROJECT_HOME}/deploy/manifests/*_namespace.yaml ${APISERVER_HOME}/manifests
    cp ${PROJECT_HOME}/deploy/manifests/_nodes.yaml ${APISERVER_HOME}/manifests   
@@ -293,6 +315,8 @@ set_home
 
 install_missing_deps
 
+enable_podman
+
 create_dirs
 
 if [ $IN_CTX == "false" ]; then
@@ -319,7 +343,7 @@ get_and_set_hub_ca
 
 local_ip=$(get_local_ip)
 
-prepare_manifests $local_ip $name
+prepare_manifests
 
 configure_control_plane
 
