@@ -1,5 +1,6 @@
 #!/bin/bash
 
+SCRIPT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
 KCP_PORT=6443
@@ -10,20 +11,22 @@ REGISTRATION_EXEC=/registration
 WORK_IMAGE=quay.io/open-cluster-management/work
 WORK_EXEC=/work
 
-echo ${PROJECT_HOME} | grep cymba > /dev/null
-if [ "$?" -ne 0 ]; then 
-  echo "not running in context"
-  APISERVER_HOME=${HOME}/.kcp
-  PROJECT_HOME=${HOME}
-  IN_CTX=false
-else  
-  echo "running in context"
-  APISERVER_HOME=${PROJECT_HOME}/.kcp
-fi  
-
 ###############################################################################################
 #               Functions
 ###############################################################################################
+
+set_home() {
+  echo ${PROJECT_HOME} | grep cymba > /dev/null
+  if [ "$?" -ne 0 ]; then 
+    echo "not running in context"
+    APISERVER_HOME=${HOME}/.kcp
+    PROJECT_HOME=${HOME}
+    IN_CTX=false
+  else  
+    echo "running in context"
+    APISERVER_HOME=${PROJECT_HOME}/.kcp
+  fi  
+}
 
 install_missing_deps() {
   kubectl --help &> /dev/null
@@ -242,9 +245,10 @@ generate_work_command() {
 ###########################################################################################
 #                   Main   
 ###########################################################################################
-
 if [ "$#" -ne 7 ]; then
     echo "Usage: $0 join --hub-token <hub token> --hub-apiserver <hub API server URL> --name <managed host name>"
+    echo "  On macOS you may only run as remote ssh to a linux machine, setting the env var SSH_CMD"
+    echo "  for example, 'export SSH_CMD=\"podman machine ssh\"'"
     exit
 fi
 
@@ -252,6 +256,16 @@ if [ "$1" != "join" ]; then
     echo "join is the only supported command"
     exit
 fi
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "running on macOS"
+  if [ "$SSH_CMD" == "" ]; then
+    echo "Env var SSH_CMD must be set"
+    exit -1
+  fi
+  $SSH_CMD 'bash -s' < ${SCRIPT_HOME}/deploy-agent.sh "$@"
+  exit 0
+fi  
 
 ARGS=$(getopt -a --options t:a:n: --long "hub-token:,hub-apiserver:,cluster-name:" -- "$@")
 eval set -- "$ARGS"
@@ -274,6 +288,8 @@ while true; do
       exit 1;;
   esac
 done
+
+set_home
 
 install_missing_deps
 

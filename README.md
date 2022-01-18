@@ -104,5 +104,5 @@ Install latest version of go (1.17+) following the official [instructions](https
 Then install packages required for compiling:
 
 ```shell
-sudo dnf install -y device-mapper-devel gcc gpgme-devel btrfs-progs-devel podman
+sudo dnf install -y device-mapper-devel gcc gpgme-devel btrfs-progs-devel podman jq
 ```

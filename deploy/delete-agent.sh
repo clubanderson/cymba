@@ -1,21 +1,24 @@
 #!/bin/bash
 
+SCRIPT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
-
-echo ${PROJECT_HOME} | grep cymba > /dev/null
-if [ "$?" -ne 0 ]; then 
-  echo "not running in context"
-  APISERVER_HOME=${HOME}/.kcp
-  PROJECT_HOME=${HOME}
-  IN_CTX=false
-else  
-  echo "running in context"
-  APISERVER_HOME=${PROJECT_HOME}/.kcp
-fi  
 
 ###############################################################################################
 #               Functions
 ###############################################################################################
+
+set_home() {
+  echo ${PROJECT_HOME} | grep cymba > /dev/null
+  if [ "$?" -ne 0 ]; then 
+    echo "not running in context"
+    APISERVER_HOME=${HOME}/.kcp
+    PROJECT_HOME=${HOME}
+    IN_CTX=false
+  else  
+    echo "running in context"
+    APISERVER_HOME=${PROJECT_HOME}/.kcp
+  fi  
+}
 
 delete_dir() {
   rm -rf ${PROJECT_HOME}/.kcp
@@ -53,12 +56,25 @@ remove_system_services() {
   sudo rm /etc/systemd/system/ocm-registration.service
   sudo rm /etc/systemd/system/ocm-work.service
   sudo systemctl daemon-reload
+  systemctl reset-failed
 }
 
 
 ###########################################################################################
 #                   Main   
 ###########################################################################################
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  echo "running on macOS"
+  if [ "$SSH_CMD" == "" ]; then
+    echo "Env var SSH_CMD must be set"
+    exit -1
+  fi
+  $SSH_CMD 'bash -s' < ${SCRIPT_HOME}/delete-agent.sh "$@"
+  exit 0
+fi  
+
+set_home
 
 delete_agent
 
