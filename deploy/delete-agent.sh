@@ -74,6 +74,12 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   exit 0
 fi  
 
+# handle linux remote to linux
+if [ "$SSH_CMD" != "" ]; then
+  $SSH_CMD 'bash -s' < ${SCRIPT_HOME}/delete-agent.sh "$@"
+  exit 0
+fi
+
 set_home
 
 delete_agent

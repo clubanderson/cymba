@@ -3,7 +3,7 @@ module github.com/pdettori/cymba
 go 1.16
 
 require (
-	github.com/containers/podman/v3 v3.4.2
+	github.com/containers/podman/v3 v3.4.4
 	github.com/kcp-dev/kcp v0.0.0-20211201184224-7655908c9dcb
 	github.com/stretchr/testify v1.7.0
 	k8s.io/api v0.22.2

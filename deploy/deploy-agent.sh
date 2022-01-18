@@ -279,6 +279,7 @@ if [ "$1" != "join" ]; then
     exit
 fi
 
+# handle macOS remote to linux
 if [[ "$OSTYPE" == "darwin"* ]]; then
   echo "running on macOS"
   if [ "$SSH_CMD" == "" ]; then
@@ -287,7 +288,13 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
   fi
   $SSH_CMD 'bash -s' < ${SCRIPT_HOME}/deploy-agent.sh "$@"
   exit 0
-fi  
+fi
+
+# handle linux remote to linux
+if [ "$SSH_CMD" != "" ]; then
+  $SSH_CMD 'bash -s' < ${SCRIPT_HOME}/deploy-agent.sh "$@"
+  exit 0
+fi
 
 ARGS=$(getopt -a --options t:a:n: --long "hub-token:,hub-apiserver:,cluster-name:" -- "$@")
 eval set -- "$ARGS"
