@@ -2,14 +2,22 @@
 
 PROJECT_HOME="$( cd "$( dirname "${BASH_SOURCE[0]}" )"/.. && pwd )"
 
-source ${PROJECT_HOME}/deploy/config.sh
+echo ${PROJECT_HOME} | grep cymba > /dev/null
+if [ "$?" -ne 0 ]; then 
+  echo "not running in context"
+  APISERVER_HOME=${HOME}/.kcp
+  PROJECT_HOME=${HOME}
+  IN_CTX=false
+else  
+  echo "running in context"
+  APISERVER_HOME=${PROJECT_HOME}/.kcp
+fi  
 
 ###############################################################################################
 #               Functions
 ###############################################################################################
 
 delete_dir() {
-  rm -rf ${APISERVER_HOME}
   rm -rf ${PROJECT_HOME}/.kcp
 }
 
