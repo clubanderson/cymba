@@ -268,7 +268,7 @@ generate_work_command() {
 #                   Main   
 ###########################################################################################
 if [ "$#" -ne 7 ]; then
-    echo "Usage: $0 join --hub-token <hub token> --hub-apiserver <hub API server URL> --name <managed host name>"
+    echo "Usage: $0 join --hub-token <hub token> --hub-apiserver <hub API server URL> --cluster-name <managed host name>"
     echo "  On macOS you may only run as remote ssh to a linux machine, setting the env var SSH_CMD"
     echo "  for example, 'export SSH_CMD=\"podman machine ssh\"'"
     exit
